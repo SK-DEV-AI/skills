@@ -1,0 +1,163 @@
+{
+  "skill": "researching-the-web",
+  "version": "1.0.0",
+  "purpose": "Trigger evaluation set for the skill description. 20 queries: 10 should-trigger, 10 near-miss should-not-trigger. Split is 60/40 train/validation, fixed across description iterations.",
+  "method": {
+    "runs_per_query": 3,
+    "threshold": 0.5,
+    "selection": "Choose the description iteration by VALIDATION score, not train score.",
+    "max_iterations": 5,
+    "detection": "In Claude Code, the Skill tool call is visible in JSON output: jq 'any(.messages[].content[]; .type==\"tool_use\" and .name==\"Skill\")'"
+  },
+  "notes": [
+    "Near-miss negatives deliberately share keywords with the positives.",
+    "Every should-trigger query is a substantive multi-step task; a simple one-step request will not trigger any skill, so including such queries would measure nothing.",
+    "The negatives are near-misses, not random unrelated work."
+  ],
+  "split": {
+    "train": 12,
+    "validation": 8
+  },
+  "queries": [
+    {
+      "id": "s1",
+      "query": "Research how the EU AI Act enforcement timeline has changed in the last six months and give me a sourced briefing I can send to my team.",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Explicit research request needing current, cited, multi-source information."
+    },
+    {
+      "id": "s2",
+      "query": "Is it true that Postgres 18 dropped support for MD5 passwords? I need to be able to check this before I tell our security team.",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Fact verification against a current release, needs a live primary source."
+    },
+    {
+      "id": "s3",
+      "query": "What is the current stable version of Node.js, and what are the two most recent security releases in that line?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Version and security-release question; memory would be stale."
+    },
+    {
+      "id": "s4",
+      "query": "Compare Vite 6 and Vite 7 for a mid-sized React monorepo, and tell me which one people are actually migrating to and why.",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Comparison plus community sentiment; needs current sources."
+    },
+    {
+      "id": "s5",
+      "query": "Find out who won the latest Rust compiler team survey and what the top complaint was.",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Current event with a specific answer; strongly time-sensitive."
+    },
+    {
+      "id": "s6",
+      "query": "I need to know what the GDPR penalties actually are for a data breach under 1M euros, from the primary legal text rather than a blog post.",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Legal fact, needs primary source, benefits from tool selection policy."
+    },
+    {
+      "id": "s7",
+      "query": "What changed in the v3 to v4 migration of the library I am using, and what should I change in my code?",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Migration guide research; a paraphrase from memory is exactly the failure mode."
+    },
+    {
+      "id": "s8",
+      "query": "Gather the top five papers from the last year on speculative decoding and summarize what they actually found, with citations.",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Academic literature search; arxiv/papers tool applies."
+    },
+    {
+      "id": "s9",
+      "query": "Check whether the startup I am considering has actually shipped anything in the last year, and pull their pricing page figures for me.",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Live pricing and activity check; structured extraction applies."
+    },
+    {
+      "id": "s10",
+      "query": "What is the current wait time at the airport right now, and is the train a better option this evening?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Real-time information; the archetypal case where recall fails."
+    },
+    {
+      "id": "n1",
+      "query": "Refactor this Python function so it does not call the API twice.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: 'API' and 'call' overlap with the domain, but the task is a local code edit, not a lookup."
+    },
+    {
+      "id": "n2",
+      "query": "Write a bash script that renames all .png files in this folder to .webp.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: could be done with a search for a tool, but the ask is authoring, not research."
+    },
+    {
+      "id": "n3",
+      "query": "Explain what a hash map is and how it works.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: 'explain' overlaps with research, but this is stable textbook knowledge with nothing to look up."
+    },
+    {
+      "id": "n4",
+      "query": "Add a retry with exponential backoff to the HTTP client in src/client.ts.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: mentions retry and timeout semantics, but the work is in the local repo."
+    },
+    {
+      "id": "n5",
+      "query": "Find the definition of the parseConfig function in the project I am working on.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: 'find' plus a code identifier, but the target is the local codebase, use searching-codebases."
+    },
+    {
+      "id": "n6",
+      "query": "Summarise the design doc I just pasted into the chat.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: summarising, but the source is in the conversation, so no search is needed."
+    },
+    {
+      "id": "n7",
+      "query": "Draft an email to the team about the sprint retrospective.",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: 'draft' is a research-adjacent task, but there is nothing to look up."
+    },
+    {
+      "id": "n8",
+      "query": "What is the latest version of express in the node_modules folder of this project?",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: 'latest version' is a live-lookup trigger, but the answer is in the local lockfile or package.json."
+    },
+    {
+      "id": "n9",
+      "query": "Convert this CSV into a spreadsheet and colour the negative numbers red.",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: file transformation, no external source needed."
+    },
+    {
+      "id": "n10",
+      "query": "Review this pull request for correctness bugs.",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: 'review' and 'bugs' overlap with the vulnerability theme, but the target is a local diff."
+    }
+  ]
+}

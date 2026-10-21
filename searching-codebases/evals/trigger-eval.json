@@ -1,0 +1,164 @@
+{
+  "skill": "searching-codebases",
+  "version": "1.0.0",
+  "purpose": "Trigger evaluation set for the skill description. 20 queries: 10 should-trigger, 10 near-miss should-not-trigger. Split is 60/40 train/validation, fixed across description iterations.",
+  "method": {
+    "runs_per_query": 3,
+    "threshold": 0.5,
+    "selection": "Choose the description iteration by VALIDATION score, not train score.",
+    "max_iterations": 5,
+    "detection": "In Claude Code, the Skill tool call is visible in JSON output: jq 'any(.messages[].content[]; .type==\"tool_use\" and .name==\"Skill\")'"
+  },
+  "notes": [
+    "Near-miss negatives deliberately share keywords with the positives: 'search', 'function', 'version', 'API', 'library'.",
+    "Every should-trigger query is a substantive multi-step task; a simple one-step request will not trigger any skill, so including such queries would measure nothing.",
+    "The negatives are near-misses, not random unrelated work.",
+    "Several positives require reading a dependency's real API at a pinned version, which is the failure this skill exists to fix."
+  ],
+  "split": {
+    "train": 12,
+    "validation": 8
+  },
+  "queries": [
+    {
+      "id": "s1",
+      "query": "I'm on requests 2.31.0 in this project. What arguments does Session.request actually accept, and where is it defined?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Pinned version plus a signature question: exactly the version-confusion failure."
+    },
+    {
+      "id": "s2",
+      "query": "What changed between express 4.18.2 and 4.19.2 that could break my middleware?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Version-to-version comparison of a real package."
+    },
+    {
+      "id": "s3",
+      "query": "Find where the retry logic lives in the expressjs/express repository and how it decides to retry.",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Public repository orientation and symbol location."
+    },
+    {
+      "id": "s4",
+      "query": "Is lodash 4.17.20 affected by the prototype pollution advisory, and which version fixes it?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Security advisory on a package at a specific version."
+    },
+    {
+      "id": "s5",
+      "query": "I want to add a custom transport to the httpx Client on 0.27.0. What is the correct way to do that given the actual API?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Requires reading the real source of a pinned version to write correct code."
+    },
+    {
+      "id": "s6",
+      "query": "What does the serde derive attribute #[serde(rename_all = \"camelCase\")] actually do, and what are the other valid values?",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Attribute options for a crate: a model will guess the value list from memory."
+    },
+    {
+      "id": "s7",
+      "query": "Does the Rust crate tokio still take a multi-thread runtime builder in version 1.35, or has the API changed?",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Version-specific API shape question on a crate."
+    },
+    {
+      "id": "s8",
+      "query": "Our app is on pydantic 1.10 but the docs I am reading are for v2. Which methods differ, specifically around validators?",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Major-version API drift between the installed version and the current docs."
+    },
+    {
+      "id": "s9",
+      "query": "How do people actually configure structured logging in NestJS, and what is the option name in the current release?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "Community answer plus a version-pinned option name."
+    },
+    {
+      "id": "s10",
+      "query": "What is the file layout inside the published fastapi package, and which module defines the Depends dependency injection machinery?",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "Package file listing plus a symbol location."
+    },
+    {
+      "id": "n1",
+      "query": "Find every place in this repo that calls the old pricing API and update them to the new one.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: 'API' and 'find', but the target is the local codebase, which a normal file search handles."
+    },
+    {
+      "id": "n2",
+      "query": "Write a function that validates an email address using a regex.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: 'function' overlaps, but no library or version is involved."
+    },
+    {
+      "id": "n3",
+      "query": "Explain how the event loop works in JavaScript.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: conceptual question about a language, stable knowledge, nothing to look up."
+    },
+    {
+      "id": "n4",
+      "query": "What version of Node is installed on this machine?",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: 'version' is a trigger word, but the answer is a local command, not a lookup."
+    },
+    {
+      "id": "n5",
+      "query": "Summarise the README in this repository for me.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: a repository, but a local one that the agent can just read."
+    },
+    {
+      "id": "n6",
+      "query": "Add a test for the parser in tests/parser_test.py.",
+      "should_trigger": false,
+      "split": "train",
+      "why": "Near-miss: 'parser' is a symbol, but the work is local."
+    },
+    {
+      "id": "n7",
+      "query": "Research how the EU AI Act enforcement timeline has changed and give me a sourced briefing.",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: research and sourcing, but it is web research, not code, so use researching-the-web."
+    },
+    {
+      "id": "n8",
+      "query": "What's the current stable version of Django and are there known CVEs?",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: 'version' and 'CVEs', but the answer comes from release notes on the web, not from source."
+    },
+    {
+      "id": "n9",
+      "query": "Refactor this class so it does not call the database twice.",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: mentions a call and a class, but the target is local code."
+    },
+    {
+      "id": "n10",
+      "query": "Draft a changelog entry for the release we shipped last Friday.",
+      "should_trigger": false,
+      "split": "validation",
+      "why": "Near-miss: 'changelog' is a package concept, but this is authoring, not lookup."
+    }
+  ]
+}
