@@ -496,3 +496,57 @@ On later calls: `changed` (bool), `had_previous: true`, `old_hash`, `new_hash`,
 - Empty `url` returns `success:false`, `url is required`.
 - A failed fetch during comparison returns `errorKind: transient`.
 - `had_previous:false` is not an error: fetch the page once, then diff later.
+
+## `form_fill_submit`
+
+Fill several form fields, click submit, and optionally read the result, in one
+call. Needs a Chromium-based browser with `--remote-debugging-port`.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `fields` | object[] | required | `[{selector, value}]`; add `action: "click"` for checkboxes and radios. |
+| `session_id` | string | - | Reuse a persistent tab. Omitted, a temporary session is created and closed. |
+| `url` | string | - | Page to open first. |
+| `submit_selector` | string | - | Submit control. Omit to fill without submitting. |
+| `wait_state` | enum | `networkidle` | `domcontentloaded`, `load`, `networkidle`. |
+| `read_selector` | string | - | Read this element after submitting; empty reads the whole page. |
+| `timeout` | number | 20 | Per-step timeout in seconds. |
+
+**Returns** `filled[]` (each with `selector`, `ok`, and `value_verified` plus
+`value_read_back` when a typed value did not match), `submitted`, `effect`,
+`final_url`, and `result`. `effect` is `navigated`, `content_changed` or `none`.
+
+**Failure modes**
+
+- Selector matches nothing -> `element not found`, and the form is NOT submitted.
+- Typed value does not read back -> refuses to submit and reports what it read.
+- Submit control missing -> `submit control not found`; fields stay filled in the session.
+- `effect: none` -> it submitted but nothing changed, usually validation or a JS-only form.
+
+---
+
+## `paginate`
+
+Click a next control repeatedly and collect a value per page. Needs a
+Chromium-based browser with `--remote-debugging-port`.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `next_selector` | string | required | CSS selector for the next-page control. |
+| `session_id` | string | - | Reuse a persistent tab. |
+| `url` | string | - | Page to open first. |
+| `max_pages` | int | 5 | Hard page cap (1-25). |
+| `read_selector` | string | - | What to collect per page; empty reads the whole page. |
+| `wait_state` | enum | `networkidle` | Load milestone to wait for after each click. |
+| `wait_ms` | int | 600 | Pause after each navigation. |
+| `stop_when_unchanged` | bool | true | Stop when URL and content both fail to change. |
+| `timeout` | number | 20 | Per-step timeout in seconds. |
+
+**Returns** `pages[]` (each with `page`, `url`, `found`, `value`),
+`page_count`, `stop_reason`, `truncated`.
+
+**Failure modes**
+
+- Next control missing -> `next control not found`, and it says no further pages were read.
+- Click accepted but nothing changed -> `next control had no effect`.
+- Cap reached -> `max_pages cap (N) reached` with `truncated: true`.
