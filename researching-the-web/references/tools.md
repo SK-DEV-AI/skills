@@ -153,6 +153,15 @@ of one article that were collapsed before the answer was written.
 - An answer cut off by the token budget is labelled `truncated: true` and ends
   with a visible `[truncated at N tokens ...]` marker.
 - If the answer cites only one of the retrieved sources, the text says so.
+- `unusable_sources` lists results that could not become evidence (HTTP >= 400,
+  error-page titles, under 400 chars of text) with a reason; they stay in the
+  results but never become citations.
+- When the first answer admits a gap, one extra retrieval round may run:
+  `follow_ups` records the chosen query and why, and `synthesis.round = 2` marks
+  a two-round answer. Disable with `follow_up=false`.
+- All 20 tools carry MCP annotations, so read-only tools (`search`, `fetch`) need
+  no approval while `browser_action` and `form_fill_submit` are marked
+  destructive.
 - Junk page titles are rejected: metadata like "Keyboard shortcuts" (mdbook) or
   a synthetic fetch label is not the page's subject, so it falls back to the first
   heading rather than being shown as a title.
