@@ -6,6 +6,35 @@ All tool names below are MCP tools on the `websearch` server. In a client that
 exposes MCP tools by their fully-qualified name they are called as
 `mcp__websearch__<tool>`.
 
+> **Run `doctor` first on an unfamiliar install.** It reports which lanes are
+> live and prints the exact command for the rest. Several features here are
+> optional and stay silent when absent — an empty result is often "needs
+> setup", not "broken".
+
+---
+
+## `doctor`
+
+Lane preflight. Call it when a search returns nothing, before you conclude
+something is broken, or once at the start of a session on a machine you have
+not used before.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `probe_network` | bool | `true` | Run an outbound HTTPS check (adds ~1s). Set `false` for an instant report. |
+
+Returns `summary` (`live` / `needs_setup` / `off` counts), a `lanes` array
+where each entry carries `status`, `requires`, `how_to_enable` and `note`, plus
+`where_am_i` (`local` vs headless server) and an `env` block. It reports which
+key variable NAMES are set, never their values.
+
+Key distinction it makes for you: the **keyless HTTP lanes** work anywhere,
+including a headless server. The **browser lanes** — Google AI Mode,
+`browser_action`, and the CDP fallback for bot-walled pages — need a
+Chromium-based browser with `--remote-debugging-port` running on the same host,
+and so cannot work on a server with no signed-in browser. Cross-encoder
+reranking is optional and absent by default on a fresh install.
+
 ---
 
 ## `search`
@@ -28,7 +57,7 @@ Multi-engine web search with dedup, reranking and optional synthesis.
 | `anysearch_tag` | string | - | Precise vertical tag, e.g. `code.doc`. Overrides `domain`. |
 | `anysearch_zone` | enum | `""` | `cn` or `intl`. |
 | `anysearch_language` | string | - | e.g. `en`, `zh-CN`. |
-| `google_ai_only` | bool | `false` | Skip every other engine and use Google AI Mode only. |
+| `google_ai_only` | bool | `false` | Skip every other engine and use Google AI Mode only. **Requires a signed-in Chromium over CDP**; without one this returns a structured error naming the cause and the fix, not results. |
 | `history` | string | - | Conversation context so pronouns resolve ("the second one"). |
 | `upload_urls` | string[] | - | Files for Google AI Mode: images, PDF, max 10 MB, one per call. |
 
