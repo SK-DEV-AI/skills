@@ -114,8 +114,8 @@ Search synthesis is the cited answer returned in the `synthesis` field of a
 requested, returned}`), `grounded` (`{flagged[], ok, checked_by,
 advisory:true}` when the verifier returns a verdict), `attempts`,
 `endpoints_tried[]`, `duplicates_removed`, `figures_unverified[]`,
-`citations_used`, `duration_ms`, and `cached` when the answer was served from
-cache. When there is no answer: `skipped` or `error` plus a note.
+`citations_used`, `as_of`, `duplicates_removed`, `figures_unverified[]`,
+`duration_ms`, and `cached` when the answer was served from cache. When there is no answer: `skipped` or `error` plus a note.
 
 `citations_used` counts the sources the answer actually cites, which need not be
 all of them. When it is 1 and more sources were retrieved, the text gains a
@@ -129,8 +129,12 @@ of one article that were collapsed before the answer was written.
 
 **Defaults and knobs**
 
-- `depth` default 2 when a model lane is configured, 1 when not.
+- `depth` default 3 when a model lane is configured, 1 when not.
   `WEBSEARCH_DEFAULT_DEPTH` pins it. Explicit `depth` always wins. Range 1-5.
+  Depth also sizes the page fetch (`max(5, depth*2)`, ceiling 8 via
+  `WEBSEARCH_ENRICH_MAX_PAGES`), so it changes how much evidence the model sees,
+  not just a label. Measured: depth 3 averages 4.75 source domains and 3.5
+  citations versus 2.5 and 2.25 at depth 1, at no extra wall time over depth 2.
 - `synthesize` defaults to true. `synthesize_length` is `short` (6 sentences) or
   `long` (12).
 - `WEBSEARCH_SYNTH_PROVIDER`: `local` (default; in-tool model first, Groq
@@ -149,6 +153,12 @@ of one article that were collapsed before the answer was written.
 - An answer cut off by the token budget is labelled `truncated: true` and ends
   with a visible `[truncated at N tokens ...]` marker.
 - If the answer cites only one of the retrieved sources, the text says so.
+- Junk page titles are rejected: metadata like "Keyboard shortcuts" (mdbook) or
+  a synthetic fetch label is not the page's subject, so it falls back to the first
+  heading rather than being shown as a title.
+- Sources with a publication date are sent to the model as `Published: ...`;
+  undated ones are labelled `not stated`. `as_of` on the result is the newest
+  source date, so staleness is visible rather than guessed.
 - A repeated search can return `cached: true`. The cache key includes the source
   text itself, so an edited page produces a fresh answer rather than a stale one.
 
