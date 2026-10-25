@@ -102,6 +102,8 @@ for blocked or JS-rendered pages. Supports PDF, EPUB and DOCX. SSRF-protected.
 | `mineru` | bool | false | Heavy CPU re-extraction for low-quality pages. |
 | `cookies` | object[] | - | Cookies injected into the request, for a page behind a login the user has. |
 | `fast` | bool | - | Skip the slow extraction path. |
+| `distill` | bool | `false` | Compress the page with a local model before returning it. Opt-in; never default. The result states whether it was distilled, the raw size, and how to get the raw text back. Skipped below the size threshold. |
+| `distill_question` | string | - | What you are looking for. Focuses the distiller so it is less likely to drop the detail you needed. |
 
 **Returns** `content` (markdown or text), plus `is_truncated`, `next_offset`,
 `total_extracted_chars`, and a quality flag.
@@ -176,6 +178,7 @@ JavaScript, read HTML or text, read the accessibility tree, capture a PNG.
 | `key` | string | - | DOM key value: `Enter`, `Escape`, `Tab`, `ArrowDown`. |
 | `expression` | string | - | JavaScript expression for `evaluate`. Arrow functions are auto-invoked. |
 | `wait_state` | enum | `domcontentloaded` | `domcontentloaded`, `load`, `networkidle`. |
+| `session_id` | string | - | Reuse a persistent tab from `browser_session(action='create')` instead of opening a throwaway one. Required for anything stateful across calls: logins, cookies, multi-page flows, forms. Without it, each call gets a fresh tab that is closed afterwards. |
 | `steps` | object[] | - | Ordered multi-step flow in ONE tab, max 25 steps, same fields as above. |
 | `timeout` | number | 30 | Per-step timeout in seconds, 1-120. |
 | `max_chars` | int | 20000 | Cap for `html`, `text`, `aria`. |
@@ -293,3 +296,203 @@ Use `pages` to bound it.
 
 Connectivity check. No parameters. Use it once at the start of a session if
 searches are failing, not on every call.
+
+---
+
+## `browser_session`
+
+Persistent browser tab reused across calls. Needs a Chromium-based browser with
+`--remote-debugging-port`. Without a session, every `browser_action` call gets a
+fresh tab that is closed at the end of the call, so state does not survive.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `action` | enum | `list` | `create`, `list`, `info`, `close`. |
+| `session_id` | string | - | Required for `info`/`close`. Omit from `close` to close every session. |
+| `label` | string | - | Human label folded into the generated id, e.g. `login`. |
+| `url` | string | - | Optional page to open in the new session. |
+
+**Returns** for `create`: `session_id`, `label`, `url`, `tabs` (1). For `list`:
+`count`, `sessions[]` (each with `session_id`, `label`, `url`, `age_seconds`,
+`idle_seconds`, optionally `current_url`), `stale_on_disk[]`, `cap`. For `info`:
+the same fields plus `live`. For `close`: the closed id or `closed_count`.
+
+**Failure modes**
+
+- `action=create` with no CDP browser reachable returns `success:false` with
+  `error`, `fix` (start Chromium with `--remote-debugging-port=9222`) and
+  `call: doctor()`.
+- `action=info`/`close` without `session_id` errors (`session_id is required for
+  action=info`).
+- `action=close` with an unknown id returns `success:false` and
+  `unknown session_id`.
+- Sessions are capped at 8. The least recently used is evicted when the cap is
+  hit; a closed tab is tried once for re-attach, then fails honestly.
+- Sessions are owned by this process and vanish on restart.
+
+---
+
+## `fetch_many`
+
+Fetch several URLs in one call: dedups, caps concurrency, honours robots.txt,
+shares the cache. Returns per-URL success/status/content plus counts.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `urls` | string[] | required | URLs to fetch (may be a single string of comma/newline-separated URLs). |
+| `max_concurrent` | int | 3 | Parallel fetches, 1-8. |
+| `max_chars` | int | 5000 | Characters per URL. |
+| `focus` | string | - | Keep only content relevant to this query. |
+| `respect_robots` | bool | true | Honour robots.txt per URL. |
+| `cache_ttl` | int | 3600 | Shared cache TTL in seconds. |
+
+**Returns** `requested`, `deduped` (count dropped by dedup), `attempted`,
+`succeeded`, `failed`, `results[]` (each with `url`, `success`, `status`,
+`title`, `content`, `chars`, `final_url`, optionally `error`, `method`,
+`truncated`, `blocked_by_robots`), `truncated` (true when the 50-URL batch cap
+was hit), and `note`.
+
+**Failure modes**
+
+- Empty `urls` returns `success:false`, `urls must not be empty`.
+- More than 50 unique URLs: the excess are dropped and `truncated:true` with a
+  note naming the batch cap. Call again with the rest.
+- A URL blocked by robots.txt returns `blocked_by_robots:true` with
+  `error: Disallowed by robots.txt`.
+- SSRF-blocked URLs return `errorKind: permanent`.
+
+---
+
+## `crawl`
+
+Breadth-first crawl with hard caps: per-page cap, depth cap, robots.txt, dedup,
+concurrency limit. Returns each page's title and trimmed content plus a
+`stop_reason`.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `start_url` | string | required | Where to start. |
+| `max_depth` | int | 1 | Link hops from start, 0-5. |
+| `max_urls` | int | 20 | Hard page cap, 1-100. |
+| `same_domain` | bool | true | Stay on the start domain. |
+| `include_patterns` | string[] | - | Only URLs containing one of these substrings. |
+| `exclude_patterns` | string[] | - | Drop URLs containing any of these substrings. |
+| `concurrency` | int | 2 | Parallel fetches, capped at 5. |
+| `respect_robots` | bool | true | Honour robots.txt. |
+| `max_chars` | int | 4000 | Content kept per page. |
+
+**Returns** `start_url`, `pages_crawled`, `pages_succeeded`, `discovered`,
+`max_depth` (the clamped cap), `stop_reason`, `truncated` (true unless
+`stop_reason` is `completed`), `pages[]` (each with `url`, `depth`, `success`,
+`status`, `title`, `chars`, `content`, optionally `error`).
+
+**Failure modes**
+
+- Empty `start_url` returns `success:false`, `start_url is required`.
+- `stop_reason` names the cap that stopped the crawl, e.g.
+  `max_urls cap (20) reached`. Use it to tell "exhausted" from "truncated".
+- `max_urls` is clamped to 100 and `max_depth` to 5 regardless of input.
+- Pages disallowed by robots.txt are returned in `pages[]` with an error rather
+  than silently skipped.
+
+---
+
+## `extract_links`
+
+Every link on a page with anchor text, title and rel. Resolves relative hrefs,
+drops `javascript:`/`mailto:`, dedups, can stay on one domain.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `url` | string | required | Page to read. |
+| `same_domain` | bool | true | Keep links on the start domain only. |
+| `max_links` | int | 500 | Cap on returned links. |
+| `include_text` | bool | true | Include anchor text, title and rel. |
+
+**Returns** `url`, `count`, `links[]` (each with `url`, and when
+`include_text` is true `text`, `title`, `rel`), `truncated` (true when the
+page HTML was truncated or `max_links` was reached), `note`.
+
+**Failure modes**
+
+- Empty `url` returns `success:false`, `url is required`.
+- HTML parse failure returns `errorKind: permanent`.
+- SSRF-blocked URLs return `errorKind: permanent`.
+
+---
+
+## `extract_table`
+
+Pull HTML tables into JSON, CSV or markdown. Reports `tables_found` so you can
+pick one by index, and marks `truncated` when `max_rows` is hit.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `url` | string | required | Page to read. |
+| `selector` | string | - | CSS selector narrowing which tables are considered. |
+| `fmt` | enum | `json` | `json`, `csv`, `markdown`. |
+| `index` | int | 0 | 0-based index among matched tables. |
+| `max_rows` | int | 5000 | Cap on returned rows. |
+
+**Returns** `url`, `tables_found`, `table_index`, `format`, `rows`, `cols`,
+`truncated`, `data` (rows as a list of string arrays for `json`, a CSV string
+for `csv`, a markdown table for `markdown`), and `note` when truncated.
+
+**Failure modes**
+
+- Empty `url` returns `success:false`, `url is required`.
+- No `<table>` found returns `errorKind: permanent` with
+  `fix: Try selector='table.some-class' or use extract(css) instead`.
+- A table with no rows returns `errorKind: permanent`.
+- `index` is clamped to the last available table.
+
+---
+
+## `download`
+
+Save a URL to disk and return the local path, byte count, sha256 and content
+type. Writes only inside `dest_dir`.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `url` | string | required | URL to download. |
+| `dest_dir` | string | `~/.cache/websearch/downloads` | Directory to write into. |
+| `filename` | string | - | Desired filename; sanitised and given an extension from the content type if omitted. |
+| `max_bytes` | int | 104857600 | Byte cap on the transfer (100 MB). |
+
+**Returns** `url`, `path`, `bytes`, `sha256`, `content_type`, `truncated`,
+and `note` (when truncated, states the file on disk is incomplete).
+
+**Failure modes**
+
+- Empty `url` returns `success:false`, `url is required`.
+- SSRF-blocked URLs return `errorKind: permanent`.
+- A write failure returns `errorKind: permanent` with
+  `fix: Check dest_dir is writable and has space`.
+- Path traversal in `filename` is refused (`refusing to write outside dest_dir`).
+- When `truncated` is true the file on disk is incomplete: raise `max_bytes` or
+  accept the partial file.
+
+---
+
+## `diff_page`
+
+Compare the live page against the cached snapshot. Returns `changed`,
+`old_hash`, `new_hash`, and the added/removed lines.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `url` | string | required | Page to compare. |
+| `extraction_type` | string | `markdown` | Extraction type of the cached snapshot to compare against. |
+
+**Returns** on the first call for a URL: `changed: null`, `had_previous: false`,
+`reason: no previous snapshot cached; call fetch first, then diff again later`.
+On later calls: `changed` (bool), `had_previous: true`, `old_hash`, `new_hash`,
+`previous_fetched_at`, `added_count`, `removed_count`, `added[]`,
+`removed[]` (each capped at 200 lines).
+
+**Failure modes**
+
+- Empty `url` returns `success:false`, `url is required`.
+- A failed fetch during comparison returns `errorKind: transient`.
+- `had_previous:false` is not an error: fetch the page once, then diff later.
