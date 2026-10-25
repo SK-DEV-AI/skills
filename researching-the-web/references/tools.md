@@ -78,6 +78,82 @@ Multi-engine web search with dedup, reranking and optional synthesis.
 
 ---
 
+## `search` synthesis quality
+
+Search synthesis is the cited answer returned in the `synthesis` field of a
+`search` call. Prompt version shipped: 2026-10-25.2.
+
+**Prompt rules**
+
+- No invention. Only the supplied results may be used; a claim that cannot be
+  cited is deleted. If the results do not answer the question, it says so and
+  stops.
+- Unbiased. "Rank is not evidence." Disagreement between sources is reported
+  with each side attributed, never averaged into one figure. A false premise in
+  the question is corrected. Vendor/marketing claims are labelled as such. A
+  claim from a single source is marked "(single source)".
+- Concise by construction. Answer in the first sentence, no preamble, ceiling
+  of 6 sentences (12 with `synthesize_length="long"`), with a one-line example
+  of the expected shape. Filler phrases are banned by name. The sentence cap is
+  the length control; the token budget is only a safety net, because models
+  follow structural targets far more reliably than token counts.
+- Injection defence. Results are wrapped in delimiters carrying a random
+  per-request suffix (`<results-9f3a1c> ... </results-9f3a1c>`), so a page cannot
+  close the container by containing its own closing tag, and the content is
+  declared untrusted data. Text in a page that looks like an instruction is
+  ignored, that result is excluded, and the answer ends with
+  `Ignored instruction-like text in [N].` This shifts a probability; it is not a
+  guarantee against an adaptive attacker.
+
+**Returned fields on `synthesis`**
+
+`prompt_version` (string), `model`, `provider` (`local` or `groq`),
+`temperature` (always 0.0), `finish_reason`, `truncated` (true when
+`finish_reason=length`), `sources_used`, `sources[]`, `diversity`
+(`{n_domains, domains[], per_domain_effective, relaxed, duplicate_domains,
+requested, returned}`), `grounded` (`{flagged[], ok, checked_by,
+advisory:true}` when the verifier returns a verdict), `attempts`,
+`endpoints_tried[]`, `duplicates_removed`, `figures_unverified[]`,
+`citations_used`, `duration_ms`, and `cached` when the answer was served from
+cache. When there is no answer: `skipped` or `error` plus a note.
+
+`citations_used` counts the sources the answer actually cites, which need not be
+all of them. When it is 1 and more sources were retrieved, the text gains a
+visible "[This answer cites one source of the N retrieved...]" line.
+
+`figures_unverified` is the cheapest check and needs no model: any number in the
+answer that appears in none of the cited text was produced by the model, so it
+is either a recomputation or an invention. The same list is appended to the
+answer text as a visible marker. `duplicates_removed` counts syndicated copies
+of one article that were collapsed before the answer was written.
+
+**Defaults and knobs**
+
+- `depth` default 2 when a model lane is configured, 1 when not.
+  `WEBSEARCH_DEFAULT_DEPTH` pins it. Explicit `depth` always wins. Range 1-5.
+- `synthesize` defaults to true. `synthesize_length` is `short` (6 sentences) or
+  `long` (12).
+- `WEBSEARCH_SYNTH_PROVIDER`: `local` (default; in-tool model first, Groq
+  fallback) | `groq` | `auto`.
+- `WEBSEARCH_SYNTH_TOKENS`: 900. `WEBSEARCH_SYNTH_MAX_SOURCES`: 8.
+  `WEBSEARCH_DOMAIN_CAP`: 2. `WEBSEARCH_MIN_SOURCES`: 3.
+  `WEBSEARCH_SYNTH_SNIPPET_CHARS`: 1500.
+- The verifier is given the same source excerpts the synthesis saw. Its output
+  is marked advisory (`grounded.advisory: true`) because it is another model's
+  opinion, not proof.
+
+**Known behaviours**
+
+- With no model endpoint configured, `search` still returns ranked results and
+  `synthesis.skipped` explains why there is no written answer. It is never blank.
+- An answer cut off by the token budget is labelled `truncated: true` and ends
+  with a visible `[truncated at N tokens ...]` marker.
+- If the answer cites only one of the retrieved sources, the text says so.
+- A repeated search can return `cached: true`. The cache key includes the source
+  text itself, so an edited page produces a fresh answer rather than a stale one.
+
+---
+
 ## `fetch`
 
 URL to markdown or text. Auto-fallback: direct fetch, then a headless browser
