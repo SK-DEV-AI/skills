@@ -90,7 +90,9 @@ Multi-engine web search with dedup, reranking and optional synthesis.
   instead of retrying blind; `partial_note` says the rest were abandoned.
 - `reranker` present on a `search` -> ranking fell back to engine order, and the
   field names why (worker unavailable, timeout, cooldown after a timeout, bad
-  reply). Results are still valid; only the ordering is weaker.
+  reply, or `queued behind rerank` when the single rerank worker was already
+  busy for `WEBSEARCH_RERANK_QUEUE_WAIT`). Results are still valid; only the
+  ordering is weaker. Do not retry for this alone.
 
 ---
 
