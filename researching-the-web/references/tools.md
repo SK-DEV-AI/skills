@@ -75,6 +75,22 @@ Multi-engine web search with dedup, reranking and optional synthesis.
 - `synthesis` missing or "not configured" -> no Groq key configured. Search
   still works; only synthesis and query rewriting are off.
 - Thin result set -> widen `count`, drop `include_domains`, or use `depth=2`.
+- `busy: true` -> the server was already running its maximum number of tool
+  calls (`WEBSEARCH_MAX_CONCURRENT`, default 8) and this call waited
+  `WEBSEARCH_QUEUE_WAIT` seconds for a slot. It is `retryable`: **retry in a few
+  seconds** rather than escalating. This is a swarm-pressure signal, not an
+  error in the request.
+- `deadline_exceeded: true` -> the server cut the call at
+  `WEBSEARCH_TOOL_DEADLINE` (default 240 s, under the client's 300 s) and says
+  which knob to raise. Narrow the request first (`depth`, `count`,
+  `synthesize=false`): the deadline protects the server, it does not make the
+  work cheaper.
+- `partial` present -> the call was cut, but the stages that had finished are
+  inside `partial` (for `search`, the sources already ranked). **Cite those**
+  instead of retrying blind; `partial_note` says the rest were abandoned.
+- `reranker` present on a `search` -> ranking fell back to engine order, and the
+  field names why (worker unavailable, timeout, cooldown after a timeout, bad
+  reply). Results are still valid; only the ordering is weaker.
 
 ---
 
